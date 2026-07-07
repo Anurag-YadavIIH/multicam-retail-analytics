@@ -14,13 +14,13 @@ jobs:
       - name: Install deps (backend + test)
         run: |
           pip install -r backend/requirements.txt
-          pip install pytest pytest-cov pytest-asyncio ruff black numpy pyyaml
+          pip install pytest pytest-cov pytest-asyncio ruff black numpy pyyaml opencv-python-headless==4.10.0.84
       - name: Ruff
         run: ruff check .
       - name: Black
         run: black --check .
       - name: Pytest (unit + API, no torch needed)
-        run: pytest tests/unit tests/integration --cov=backend --cov=analytics --cov=tracking --cov-report=term
+        run: pytest tests/unit tests/integration --cov=backend --cov=analytics --cov=tracking --cov=vision --cov-report=term
         env:
           DATABASE_URL: sqlite:///./test.db
 
