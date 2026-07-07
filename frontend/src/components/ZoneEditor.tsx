@@ -63,6 +63,13 @@ export default function ZoneEditor({
 
   useEffect(loadSnapshot, [cameraId]);
 
+  // a draft is only ever valid for the camera it was started against - drop
+  // it if the selected camera changes underneath us, so a half-drawn zone
+  // can never be saved to the wrong camera_id
+  useEffect(() => {
+    setDraft(null);
+  }, [cameraId]);
+
   useEffect(() => {
     if (!imgEl) return;
     const ro = new ResizeObserver((entries) => {
