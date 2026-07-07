@@ -37,10 +37,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
+export interface Zone {
+  id: number; camera_id: number; name: string; type: string; polygon: number[][];
+}
 export interface Camera {
   id: number; name: string; source: string; type: string; status: string;
   location: string; fps_target: number; is_active: boolean; measured_fps: number;
-  zones: { id: number; name: string; type: string; polygon: number[][] }[];
+  zones: Zone[];
 }
 export interface Overview {
   total_visitors_today: number; current_occupancy: number; avg_dwell_s: number;

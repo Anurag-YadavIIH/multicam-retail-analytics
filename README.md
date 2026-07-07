@@ -62,6 +62,7 @@ docker compose --profile full up -d --build
 | JWT auth + RBAC (admin/manager/viewer), audit logs | `backend/app/core/`, `backend/app/api/v1/users.py` |
 | WebSockets: detections/alerts/analytics | `backend/app/api/v1/ws.py` |
 | Live MJPEG preview + snapshot (Redis frame cache) | `backend/app/api/v1/cameras.py`, `vision/preview.py` |
+| Zone editor (draw/edit polygons over a snapshot, plain SVG) | `frontend/src/components/ZoneEditor.tsx` |
 | Kafka event bus (optional) | `streaming/kafka_client.py` |
 | Celery: health sweeps, daily reports, retention | `backend/app/services/tasks.py` |
 | Prometheus metrics + Grafana dashboard | `monitoring/` |
@@ -85,7 +86,7 @@ with MLflow tracking: `docs/TRAINING.md`.
 ```bash
 pip install -r backend/requirements.txt -r vision/requirements.txt
 pip install pytest pytest-cov ruff black
-pytest                       # 86 tests, ~89% coverage on backend/analytics/tracking/vision
+pytest                       # 92 tests, ~89% coverage on backend/analytics/tracking/vision
 ruff check . && black .
 cd frontend && npm install && npm run dev
 ```

@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.camera import Camera, Zone
-from backend.app.schemas.camera import CameraCreate, CameraUpdate, ZoneCreate
+from backend.app.schemas.camera import CameraCreate, CameraUpdate, ZoneCreate, ZoneUpdate
 
 
 def list_cameras(db: Session, active_only: bool = False) -> list[Camera]:
@@ -40,6 +40,14 @@ def delete(db: Session, cam: Camera) -> None:
 def add_zone(db: Session, cam: Camera, data: ZoneCreate) -> Zone:
     zone = Zone(camera_id=cam.id, **data.model_dump())
     db.add(zone)
+    db.commit()
+    db.refresh(zone)
+    return zone
+
+
+def update_zone(db: Session, zone: Zone, data: ZoneUpdate) -> Zone:
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(zone, k, v)
     db.commit()
     db.refresh(zone)
     return zone

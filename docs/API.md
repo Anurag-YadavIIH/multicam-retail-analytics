@@ -22,7 +22,8 @@ All endpoints are under `/api/v1`. Auth is OAuth2 password flow → JWT bearer.
 | POST | /cameras/{id}/stream-token | viewer+ · mints a ~60s camera-scoped token (see below) |
 | GET | /cameras/{id}/snapshot | viewer+ · single latest JPEG (404 if the worker hasn't pushed one yet) |
 | GET | /cameras/{id}/stream | viewer+ · live `multipart/x-mixed-replace` MJPEG preview (~2-3 FPS) |
-| POST | /cameras/{id}/zones | manager+ · polygon of normalized `[x,y]` points |
+| POST | /cameras/{id}/zones | manager+ · `{name, type, polygon}` - polygon of normalized `[x,y]` points, min 3 |
+| PATCH | /cameras/{id}/zones/{zone_id} | manager+ · partial update, same polygon validation |
 | DELETE | /cameras/{id}/zones/{zone_id} | manager+ |
 
 ### Live preview auth

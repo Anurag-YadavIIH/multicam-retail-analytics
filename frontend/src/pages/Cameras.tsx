@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, Camera } from "../api/client";
 import CameraStream from "../components/CameraStream";
+import ZoneEditor from "../components/ZoneEditor";
 
 export default function Cameras() {
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -9,9 +10,15 @@ export default function Cameras() {
   const [type, setType] = useState("rtsp");
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<Camera | null>(null);
+  const [panelMode, setPanelMode] = useState<"preview" | "zones">("preview");
 
-  const load = () => api<Camera[]>("/cameras").then(setCameras).catch(console.error);
+  const load = () => api<Camera[]>("/cameras").then((data) => { setCameras(data); return data; }).catch(console.error);
   useEffect(() => { load(); }, []);
+
+  async function refreshSelected(id: number) {
+    const data = await load();
+    setSelected(data?.find((c) => c.id === id) ?? null);
+  }
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -97,14 +104,35 @@ export default function Cameras() {
       {selected && (
         <div className="card space-y-3">
           <div className="flex items-center justify-between">
-            <span className="label">Live preview — {selected.name}</span>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setPanelMode("preview")}
+                className={`label ${panelMode === "preview" ? "text-amber" : ""}`}
+              >
+                Live preview — {selected.name}
+              </button>
+              <button
+                onClick={() => setPanelMode("zones")}
+                className={`label ${panelMode === "zones" ? "text-amber" : ""}`}
+              >
+                Edit zones
+              </button>
+            </div>
             <button onClick={() => setSelected(null)} className="text-slate-500 text-xs hover:underline">
               Close
             </button>
           </div>
-          <div className="max-w-2xl">
-            <CameraStream cameraId={selected.id} />
-          </div>
+          {panelMode === "preview" ? (
+            <div className="max-w-2xl">
+              <CameraStream cameraId={selected.id} />
+            </div>
+          ) : (
+            <ZoneEditor
+              cameraId={selected.id}
+              zones={selected.zones}
+              onZonesChanged={() => refreshSelected(selected.id)}
+            />
+          )}
         </div>
       )}
     </div>

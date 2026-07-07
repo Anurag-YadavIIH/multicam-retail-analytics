@@ -22,16 +22,16 @@
 - [x] Monitoring: Prometheus metrics + Grafana dashboard provisioning
 - [x] MLOps: MLflow train script + model registry, DVC pipeline, ONNX/TensorRT export
 - [x] Datasets: sample video fetcher, Kaggle/MOT/SKU-110K downloader + docs
-- [x] Tests: 86 passing (unit/integration/e2e), ~89% coverage on backend+domain
+- [x] Tests: 92 passing (unit/integration/e2e), ~89% coverage on backend+domain
 - [x] CI: ruff, black, pytest, docker builds, Trivy scan
 - [x] Docs: README, ARCHITECTURE (mermaid: system/sequence/ER/UML/deployment),
       API, DEPLOYMENT, TRAINING, INFERENCE, DEVELOPER_GUIDE, CONTRIBUTING
 - [x] MJPEG live video preview + snapshot (Redis frame cache), scoped short-lived
       stream tokens for `<img>`/WS auth, live preview panel on the Cameras page
+- [x] Zone editor UI: plain-SVG polygon draw/edit/drag over the snapshot
+      endpoint, zone list with edit/delete, PATCH /cameras/{id}/zones/{zone_id}
 
 ## Next (great Claude Code sessions) 🚧
-- [ ] Zone editor UI (draw polygons over a camera snapshot) — can now reuse
-      GET /cameras/{id}/snapshot for the background image
 - [ ] Cross-camera Re-ID service (OSNet embeddings over Kafka closed-track topic)
 - [ ] Occupancy forecasting (Prophet/ARIMA on analytics_snapshots)
 - [ ] Anomaly detection on traffic/queue series

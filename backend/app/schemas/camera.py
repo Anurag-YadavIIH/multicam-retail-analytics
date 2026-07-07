@@ -20,6 +20,22 @@ class ZoneCreate(BaseModel):
         return v
 
 
+class ZoneUpdate(BaseModel):
+    name: str | None = None
+    type: ZoneType | None = None
+    polygon: list[list[float]] | None = Field(default=None, min_length=3)
+
+    @field_validator("polygon")
+    @classmethod
+    def normalized(cls, v: list[list[float]] | None) -> list[list[float]] | None:
+        if v is None:
+            return v
+        for pt in v:
+            if len(pt) != 2 or not all(0.0 <= c <= 1.0 for c in pt):
+                raise ValueError("polygon points must be [x, y] normalized to [0, 1]")
+        return v
+
+
 class ZoneOut(ORMModel):
     id: int
     camera_id: int

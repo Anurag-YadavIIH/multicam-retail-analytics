@@ -25,6 +25,7 @@ from backend.app.schemas.camera import (
     StreamTokenOut,
     ZoneCreate,
     ZoneOut,
+    ZoneUpdate,
 )
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
@@ -169,6 +170,25 @@ def add_zone(
     return crud.add_zone(db, cam, data)
 
 
+def _get_zone_or_404(db: Session, camera_id: int, zone_id: int) -> Zone:
+    zone = db.get(Zone, zone_id)
+    if zone is None or zone.camera_id != camera_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Zone not found")
+    return zone
+
+
+@router.patch("/{camera_id}/zones/{zone_id}", response_model=ZoneOut)
+def update_zone(
+    camera_id: int,
+    zone_id: int,
+    data: ZoneUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_manager)],
+) -> Zone:
+    zone = _get_zone_or_404(db, camera_id, zone_id)
+    return crud.update_zone(db, zone, data)
+
+
 @router.delete("/{camera_id}/zones/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_zone(
     camera_id: int,
@@ -176,7 +196,5 @@ def delete_zone(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_manager)],
 ) -> None:
-    zone = db.get(Zone, zone_id)
-    if zone is None or zone.camera_id != camera_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Zone not found")
+    zone = _get_zone_or_404(db, camera_id, zone_id)
     crud.delete_zone(db, zone)
