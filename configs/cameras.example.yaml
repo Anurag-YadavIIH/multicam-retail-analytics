@@ -1,0 +1,15 @@
+# Optional bulk camera registration (scripts/register_cameras.py)
+cameras:
+  - name: entrance-1
+    source: rtsp://user:pass@192.168.1.10:554/stream1
+    type: rtsp
+    location: Main entrance
+    fps_target: 5
+  - name: usb-test
+    source: "0"
+    type: usb
+    location: Dev laptop webcam
+  - name: demo-file
+    source: datasets/samples/retail_demo.mp4
+    type: file
+    location: Sample footage

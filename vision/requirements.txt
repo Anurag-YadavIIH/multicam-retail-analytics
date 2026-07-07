@@ -1,0 +1,16 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+torchvision==0.20.1
+ultralytics==8.3.58
+supervision==0.25.1
+opencv-python-headless==4.10.0.84
+onnxruntime==1.20.1
+numpy==1.26.4
+httpx==0.28.1
+redis==5.2.1
+pydantic-settings==2.6.1
+pydantic==2.10.3
+PyYAML==6.0.2
+kafka-python-ng==2.2.3
+prometheus-client==0.21.1
+mlflow-skinny==2.14.1

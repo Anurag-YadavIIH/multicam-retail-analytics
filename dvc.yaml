@@ -1,0 +1,15 @@
+# DVC pipeline: dataset -> fine-tuned model -> ONNX export
+stages:
+  train:
+    cmd: python scripts/train.py --data datasets/kaggle-retail/data.yaml --epochs 30
+    deps:
+      - scripts/train.py
+      - datasets/kaggle-retail
+    outs:
+      - models/runs/train/weights/best.pt
+  export:
+    cmd: python scripts/export_onnx.py --model models/runs/train/weights/best.pt
+    deps:
+      - models/runs/train/weights/best.pt
+    outs:
+      - models/best.onnx

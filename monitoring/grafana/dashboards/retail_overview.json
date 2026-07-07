@@ -1,0 +1,21 @@
+{
+  "title": "Retail Vision - Pipeline Overview",
+  "uid": "retail-overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "panels": [
+    {"type": "timeseries", "title": "Pipeline FPS per camera", "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+     "targets": [{"expr": "rva_camera_fps", "legendFormat": "camera {{camera_id}}"}]},
+    {"type": "timeseries", "title": "People count per camera", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+     "targets": [{"expr": "rva_people_count", "legendFormat": "camera {{camera_id}}"}]},
+    {"type": "timeseries", "title": "Queue length", "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+     "targets": [{"expr": "rva_queue_length", "legendFormat": "camera {{camera_id}}"}]},
+    {"type": "timeseries", "title": "Detections/sec by class", "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+     "targets": [{"expr": "sum by (class_name) (rate(rva_detections_total[5m]))", "legendFormat": "{{class_name}}"}]},
+    {"type": "timeseries", "title": "API p95 latency", "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+     "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(rva_api_latency_seconds_bucket[5m])))"}]},
+    {"type": "timeseries", "title": "Alerts raised (rate)", "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+     "targets": [{"expr": "sum by (type) (rate(rva_alerts_total[15m]))", "legendFormat": "{{type}}"}]}
+  ]
+}

@@ -1,0 +1,19 @@
+# Maps raw model classes -> retail domain classes.
+# With the default COCO-pretrained yolo11n these mappings are heuristic;
+# after fine-tuning (docs/TRAINING.md) replace with your own classes, e.g.:
+#   shopping_cart: cart
+#   shelf: shelf
+#   checkout_counter: checkout_counter
+#   staff: staff
+class_map:
+  person: person
+  backpack: basket
+  handbag: basket
+  suitcase: cart
+  bottle: product
+  cup: product
+  banana: product
+  apple: product
+  orange: product
+  book: product
+  cell phone: product

@@ -1,0 +1,10 @@
+alerts:
+  queue_length_threshold: 6
+  crowding_people_threshold: 25
+  camera_offline_seconds: 60
+analytics:
+  snapshot_interval_s: 60
+  loiter_seconds: 120
+  shelf_empty_after_s: 60
+retention:
+  detections_days: 7

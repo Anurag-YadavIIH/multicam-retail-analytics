@@ -1,0 +1,27 @@
+[project]
+name = "retail-vision-analytics"
+version = "1.0.0"
+description = "Smart Multi-Camera Retail Analytics System"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["frontend", "alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4"]
+ignore = ["B008", "UP042"]  # B008: FastAPI Depends(); UP042: str-Enums are intentional (JSON serialization)
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --cov=backend --cov=analytics --cov=tracking --cov=vision --cov-report=term-missing"
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = ["*/alembic/*", "tests/*", "scripts/*"]
