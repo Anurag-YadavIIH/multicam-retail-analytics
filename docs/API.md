@@ -63,7 +63,15 @@ other endpoint.
 ## Internal (vision workers, header `X-Worker-Key: <SECRET_KEY>`)
 | POST | /ingest/frame | detections + optional snapshot |
 | POST | /ingest/track | upsert closed track |
+| POST | /ingest/reid | `{camera_id, track_id, embedding[512]}` - see docs/REID.md. Requires `/ingest/track` to have already run for that track (404 otherwise); no matching yet, just stores the vector |
 | POST | /cameras/{id}/heartbeat?fps= | health |
+
+## Cross-camera Re-ID
+
+Data layer only so far (see `docs/REID.md` for the full design and session
+plan) - `/ingest/reid` above stores embeddings, nothing links tracks to
+identities yet. Planned: `GET /reid/identities/{id}/journey` (viewer+), once
+matching exists to populate it.
 
 ## WebSockets (`?token=<access_token>`)
 | /ws/detections/{camera_id} | live boxes + track IDs (normalized bboxes) |

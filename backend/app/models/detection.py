@@ -55,3 +55,9 @@ class Track(Base):
     # downsampled trajectory [[x, y, t_offset_s], ...] in normalized coords
     trajectory: Mapped[list] = mapped_column(JSON, default=list)
     zones_visited: Mapped[list] = mapped_column(JSON, default=list)
+    # cross-camera re-id (see docs/REID.md) - both null until the worker posts
+    # /ingest/reid and, later, the matcher links this track to a gallery identity
+    embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    identity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("identities.id", ondelete="SET NULL"), nullable=True, index=True
+    )

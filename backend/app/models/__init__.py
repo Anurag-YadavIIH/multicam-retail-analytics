@@ -10,6 +10,7 @@ from backend.app.models.event import (
     EventType,
     Report,
 )
+from backend.app.models.reid import Identity
 from backend.app.models.user import Role, User
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "Event",
     "EventType",
     "Frame",
+    "Identity",
     "Report",
     "Role",
     "Track",

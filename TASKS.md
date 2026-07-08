@@ -22,7 +22,7 @@
 - [x] Monitoring: Prometheus metrics + Grafana dashboard provisioning
 - [x] MLOps: MLflow train script + model registry, DVC pipeline, ONNX/TensorRT export
 - [x] Datasets: sample video fetcher, Kaggle/MOT/SKU-110K downloader + docs
-- [x] Tests: 92 passing (unit/integration/e2e), ~89% coverage on backend+domain
+- [x] Tests: 105 passing (unit/integration/e2e), ~90% coverage on backend+domain
 - [x] CI: ruff, black, pytest, docker builds, Trivy scan
 - [x] Docs: README, ARCHITECTURE (mermaid: system/sequence/ER/UML/deployment),
       API, DEPLOYMENT, TRAINING, INFERENCE, DEVELOPER_GUIDE, CONTRIBUTING
@@ -32,7 +32,12 @@
       endpoint, zone list with edit/delete, PATCH /cameras/{id}/zones/{zone_id}
 
 ## Next (great Claude Code sessions) 🚧
-- [ ] Cross-camera Re-ID service (OSNet embeddings over Kafka closed-track topic)
+- [ ] Cross-camera Re-ID service — design in `docs/REID.md` (transport-agnostic
+      matcher, not Kafka-only; embeddings extracted on-worker, never raw crops).
+      Session 1/3 done: `identities` table, `tracks.embedding`/`identity_id`,
+      `POST /ingest/reid` + tests. Next: OSNet ONNX export + on-worker
+      extraction (session 2); matcher + `GET /reid/identities/{id}/journey`
+      (session 3)
 - [ ] Occupancy forecasting (Prophet/ARIMA on analytics_snapshots)
 - [ ] Anomaly detection on traffic/queue series
 - [ ] Heatmap gallery page + report PDF export

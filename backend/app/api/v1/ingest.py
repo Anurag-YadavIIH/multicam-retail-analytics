@@ -13,8 +13,10 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
 from backend.app.core.database import get_db
+from backend.app.crud import reid as reid_crud
 from backend.app.models import AnalyticsSnapshot, Detection, Track
 from backend.app.schemas.analytics import IngestDetection
+from backend.app.schemas.reid import ReidIngestIn
 from backend.app.services import metrics
 from backend.app.services.alert_service import evaluate_snapshot
 from backend.app.services.ws_manager import ws_manager
@@ -134,4 +136,16 @@ def ingest_track(body: dict, db: Annotated[Session, Depends(get_db)]) -> dict:
     row.trajectory = body.get("trajectory", [])
     row.zones_visited = body.get("zones_visited", [])
     db.commit()
+    return {"ok": True}
+
+
+@router.post("/reid", dependencies=[Depends(verify_worker)])
+def ingest_reid(body: ReidIngestIn, db: Annotated[Session, Depends(get_db)]) -> dict:
+    """Store a closed track's Re-ID embedding (see docs/REID.md). Requires
+    /ingest/track to have already been called for this camera_id/track_id -
+    404 otherwise, so the worker knows to retry rather than silently drop it.
+    No matching yet - that's session 3."""
+    track = reid_crud.store_track_embedding(db, body.camera_id, body.track_id, body.embedding)
+    if track is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Track not found - send /ingest/track first")
     return {"ok": True}
