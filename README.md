@@ -1,5 +1,7 @@
 # Smart Multi-Camera Retail Analytics System
 
+[![CI](https://github.com/Anurag-YadavIIH/multicam-retail-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/Anurag-YadavIIH/multicam-retail-analytics/actions/workflows/ci.yml)
+
 Production-style computer-vision platform for retail stores: multi-camera ingestion,
 YOLO detection, ByteTrack multi-object tracking, zone/queue/shelf analytics, real-time
 alerts, a React ops dashboard, and full observability — all runnable on a laptop with
@@ -16,6 +18,14 @@ cameras (RTSP/USB/file) ──► vision worker ──► FastAPI ingest ──�
                              face blur, heatmaps    ├─► Alerts (Slack/email/webhook)
                                                     └─► Prometheus ──► Grafana
 ```
+
+## Demo
+
+Draw a zone on a live camera feed and watch it show up in the analytics within
+seconds — that's the core loop: **Cameras → select a camera → Edit zones → draw
+a queue polygon → Save → Dashboard queue/dwell metrics update live**, all from
+the same looping demo video. Spin up the lite stack below (~2 min), open
+http://localhost:5173, and log in with `admin@retail.local` / `admin12345`.
 
 ## Quick start (8 GB RAM friendly — "lite" mode)
 
