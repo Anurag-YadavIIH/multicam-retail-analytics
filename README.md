@@ -97,7 +97,7 @@ with MLflow tracking: `docs/TRAINING.md`.
 ```bash
 pip install -r backend/requirements.txt -r vision/requirements.txt
 pip install pytest pytest-cov ruff black
-pytest                       # 126 tests, ~90% coverage on backend/analytics/tracking/vision
+pytest                       # 134 tests, ~91% coverage on backend/analytics/tracking/vision
 ruff check . && black .
 cd frontend && npm install && npm run dev
 ```

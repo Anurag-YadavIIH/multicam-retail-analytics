@@ -54,3 +54,11 @@ export interface Alert {
   severity: string; message: string; acknowledged: boolean;
 }
 export interface TrafficPoint { ts: string; count: number; }
+export interface Identity {
+  id: number; first_seen: string; last_seen: string; track_count: number;
+}
+export interface JourneyTrack {
+  camera_id: number; track_id: number; first_seen: string; last_seen: string;
+  trajectory: number[][]; zones_visited: string[];
+}
+export interface IdentityJourney { identity: Identity; tracks: JourneyTrack[]; }

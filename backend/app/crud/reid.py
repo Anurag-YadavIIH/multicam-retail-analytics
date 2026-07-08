@@ -1,9 +1,7 @@
 """Re-ID data layer: identities gallery + track embedding storage/linking.
 
 No matching *decisions* here (see backend/app/services/reid_matcher.py for
-the cosine-similarity logic) - this module only stores and links.
-`get_identity_journey` isn't called by any route yet, but it's the primitive
-the future journeys endpoint will use.
+the cosine-similarity logic) - this module only stores, links, and queries.
 """
 
 from datetime import datetime
@@ -64,7 +62,24 @@ def link_track_to_identity(db: Session, track: Track, identity: Identity) -> Tra
 
 def get_identity_journey(db: Session, identity_id: int) -> list[Track]:
     """All tracks linked to this identity, ordered by when they were seen -
-    the cross-camera path. Backs the future GET .../journey endpoint."""
+    the cross-camera path. Backs GET /reid/identities/{id}/journey."""
     return list(
         db.scalars(select(Track).where(Track.identity_id == identity_id).order_by(Track.first_seen))
+    )
+
+
+def list_recent_identities(
+    db: Session, min_track_count: int = 2, limit: int = 50
+) -> list[Identity]:
+    """Identities linked to more than one track, most recently seen first -
+    "matched more than once" is the plain-language definition of a
+    re-identification (same-camera or cross-camera). Backs
+    GET /reid/identities."""
+    return list(
+        db.scalars(
+            select(Identity)
+            .where(Identity.track_count >= min_track_count)
+            .order_by(Identity.last_seen.desc())
+            .limit(limit)
+        )
     )

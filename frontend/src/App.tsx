@@ -3,6 +3,7 @@ import { getToken, logout } from "./api/client";
 import Dashboard from "./pages/Dashboard";
 import Cameras from "./pages/Cameras";
 import Alerts from "./pages/Alerts";
+import Identities from "./pages/Identities";
 import Login from "./pages/Login";
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <nav className="flex gap-1">
             <NavLink to="/" className={active} end>Dashboard</NavLink>
             <NavLink to="/cameras" className={active}>Cameras</NavLink>
+            <NavLink to="/identities" className={active}>Identities</NavLink>
             <NavLink to="/alerts" className={active}>Alerts</NavLink>
           </nav>
           <button
@@ -44,6 +46,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protected><Dashboard /></Protected>} />
       <Route path="/cameras" element={<Protected><Cameras /></Protected>} />
+      <Route path="/identities" element={<Protected><Identities /></Protected>} />
       <Route path="/alerts" element={<Protected><Alerts /></Protected>} />
     </Routes>
   );

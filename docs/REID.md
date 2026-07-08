@@ -5,12 +5,20 @@ comparing appearance embeddings, so a customer who walks from the entrance
 camera to the checkout camera is recognized as the same person without any
 biometric ID system - just embedding similarity, time, and (later) geometry.
 
-This is a multi-session build. **This document covers the full design.**
-Implemented so far: the data layer (session 1), on-worker OSNet extraction,
-and the matcher wired inline into `/ingest/reid` (session 2 - matching was
-originally planned for session 3, but landed a session early; see "Session
-breakdown"). Remaining: real-model calibration, the `journeys` endpoint, and
-Kafka fan-out under `--profile full` (now session 3).
+This is a multi-session build. **This document covers the full design**,
+including the transport-agnostic Kafka fan-out path for `--profile full` -
+but that path is **descoped from implementation** (see "Constraints" #1 and
+"Transport" below): the design stays because it costs nothing to keep the
+matcher decoupled from transport, but the actual Kafka producer/consumer code
+was never written, because this project's 8 GB target machine can't run
+`--profile full` well enough to verify it live, and unverified code doesn't
+ship here.
+
+Implemented: the data layer (session 1); on-worker OSNet extraction and the
+matcher wired inline into `/ingest/reid` (session 2). Session 3 (in
+progress): the `journeys`/list read endpoints, a calibration script, the
+real exported model, and threshold calibration against it. See "Session
+breakdown" for exactly what's done vs. pending as this session progresses.
 
 ## Constraints, and where this design departs from TASKS.md / INFERENCE.md
 
@@ -25,9 +33,14 @@ current pipeline, so this design deliberately departs from them:
    plain, transport-agnostic Python function) from **transport** (how a
    "track closed, embedding ready" event reaches it): lite mode calls it
    inline, synchronously, right after the ingest endpoint stores the
-   embedding; full profile can additionally fan it out via Kafka to a
-   consumer for horizontal scaling. Same function either way - no Kafka
-   dependency to unit-test matching.
+   embedding; full profile *could* additionally fan it out via Kafka to a
+   consumer for horizontal scaling - same function either way, no Kafka
+   dependency to unit-test matching. **That Kafka fan-out is designed but
+   deliberately not implemented** (see "Transport" below and
+   `TASKS.md`): this project's 8 GB target machine can't run `--profile
+   full` well enough to verify it live, and this codebase doesn't ship
+   unverified code paths. The matcher is already transport-agnostic
+   specifically so this can be added later without touching matching logic.
 2. **INFERENCE.md: "`Track.trajectory` + per-track crops give you the
    inputs."** Nothing in the pipeline stores per-track image crops anywhere
    today - the worker only ever sends metadata to the backend, plus an
@@ -63,9 +76,10 @@ track closes
                                           │
                                           └─ invoke match_or_create_identity(db, track, embedding)
                                              ├─ lite: called inline, same request (implemented)
-                                             └─ full: also published to a Kafka
-                                                topic; a consumer (or Celery task)
-                                                calls the same matcher function (session 3)
+                                             └─ full: designed to also publish to a Kafka
+                                                topic for a consumer (or Celery task) to call
+                                                the same matcher function - NOT implemented,
+                                                see "Transport" and TASKS.md
 ```
 
 ### Extraction (vision worker) - implemented
@@ -148,7 +162,7 @@ target scale (a handful of store cameras), so neither is built now.
 | Profile | How a closed track's embedding reaches the matcher |
 |---|---|
 | lite (default) | `POST /ingest/reid` stores the embedding, then calls the matcher function inline in the same request - **implemented** |
-| full | same inline call, **plus** the ingest handler publishes to a `reid-tracks` Kafka topic; a consumer (or Celery task) calls the identical matcher function for decoupled/scaled processing - **session 3** |
+| full | same inline call, **plus** the ingest handler would publish to a `reid-tracks` Kafka topic; a consumer (or Celery task) would call the identical matcher function for decoupled/scaled processing - **designed, not implemented; see TASKS.md.** Not needed at this project's scale (a handful of store cameras, verified fine running inline - see the scale assumption above), and this project's hardware can't verify a full-profile code path live, so it isn't built. Add it later exactly as designed here if a real multi-store, high-throughput deployment needs it. |
 
 ### Gallery storage & TTL
 
@@ -242,16 +256,25 @@ absorb ordinary request-ordering/network jitter between the two calls, then
 gives up and logs a warning rather than retrying indefinitely or blocking the
 pipeline on it.
 
-### `GET /api/v1/reid/identities/{id}/journey` (viewer+) - designed, not yet implemented
+### `GET /api/v1/reid/identities?min_track_count=2&limit=50` (viewer+) - implemented
 
-Returns one identity's cross-camera path: the identity plus its linked tracks
-ordered by `first_seen`, each with `camera_id`, `track_id`, `first_seen`,
-`last_seen`, `trajectory`, `zones_visited` - literally "everywhere this
-appearance was seen, in order." The matcher now actually links tracks to
-identities, so there's real data for this endpoint to return - it's still
-just not wired up yet (session 3). The backing query (`get_identity_journey`)
-is already implemented and unit-tested (session 1), ready for this endpoint
-to call.
+Recently re-identified visitors: identities linked to `min_track_count` or
+more tracks (default 2 - "matched more than once"), most recently seen
+first. `{id, first_seen, last_seen, track_count}` per identity - no
+embeddings in the response, this is a read API for humans, not a gallery
+dump.
+
+### `GET /api/v1/reid/identities/{id}/journey` (viewer+) - implemented
+
+Returns one identity's path: the identity plus its linked tracks ordered by
+`first_seen`, each with `camera_id`, `track_id`, `first_seen`, `last_seen`,
+`trajectory`, `zones_visited` - literally "everywhere this appearance was
+seen, in order." 404 if the identity doesn't exist. Backed by
+`get_identity_journey` (implemented and unit-tested since session 1).
+
+Both endpoints are plain read-only routes in `backend/app/api/v1/reid.py` -
+no new auth pattern, just the existing `require_viewer` dependency every
+other viewer+ route already uses.
 
 ## Session breakdown
 
@@ -265,8 +288,15 @@ to call.
    originally scoped for session 3, moved up because lite-mode matching has
    no transport dependency to build first. Mocked-model/pure-function tests
    throughout; no real inference run anywhere in this session.
-3. **Session 3 (remaining):** real-model verification - export the actual
-   ONNX model and confirm it produces closer embeddings for the same person
-   across the demo video than for different people; calibrate
-   `REID_MATCH_THRESHOLD` against that; the `journeys` endpoint; Kafka
-   fan-out under `--profile full`.
+3. **Session 3 (in progress):** `GET /reid/identities` + `.../journey` and
+   the "Identities" frontend page (done); `scripts/calibrate_reid.py`
+   (done - a two-phase extract-then-calibrate harness, pure-function
+   distribution math manually verified since `scripts/` isn't
+   unit-tested anywhere in this project); exporting the real ONNX model,
+   running calibration against it, and confirming same-camera
+   re-identification works end-to-end on the demo video (pending - blocked
+   on the export, which runs in a throwaway Docker container on the
+   operator's machine, not in CI or this session). **Kafka fan-out under `--profile
+   full` was descoped from this session** (and this project) rather than
+   shipped unverified - see "Constraints" #1, "Transport" above, and
+   `TASKS.md`.

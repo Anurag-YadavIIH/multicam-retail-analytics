@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
 
-from backend.app.api.v1 import alerts, analytics, auth, cameras, ingest, reports, users, ws
+from backend.app.api.v1 import alerts, analytics, auth, cameras, ingest, reid, reports, users, ws
 from backend.app.core.config import get_settings
 from backend.app.services.metrics import API_LATENCY
 
@@ -52,6 +52,7 @@ def create_app() -> FastAPI:
     app.include_router(alerts.router, prefix=api)
     app.include_router(reports.router, prefix=api)
     app.include_router(ingest.router, prefix=api)
+    app.include_router(reid.router, prefix=api)
     app.include_router(ws.router)
 
     @app.get("/health", tags=["ops"])

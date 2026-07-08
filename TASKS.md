@@ -22,7 +22,7 @@
 - [x] Monitoring: Prometheus metrics + Grafana dashboard provisioning
 - [x] MLOps: MLflow train script + model registry, DVC pipeline, ONNX/TensorRT export
 - [x] Datasets: sample video fetcher, Kaggle/MOT/SKU-110K downloader + docs
-- [x] Tests: 126 passing (unit/integration/e2e), ~90% coverage on backend+domain
+- [x] Tests: 134 passing (unit/integration/e2e), ~91% coverage on backend+domain
 - [x] CI: ruff, black, pytest, docker builds, Trivy scan
 - [x] Docs: README, ARCHITECTURE (mermaid: system/sequence/ER/UML/deployment),
       API, DEPLOYMENT, TRAINING, INFERENCE, DEVELOPER_GUIDE, CONTRIBUTING
@@ -37,12 +37,23 @@
       Session 1/3: `identities` table, `tracks.embedding`/`identity_id`,
       `POST /ingest/reid` + tests. Session 2/3: OSNet ONNX export script,
       on-worker extraction (best-crop heuristic, fail-soft), and the matcher
-      wired inline into `/ingest/reid` (moved up from session 3 - no
-      transport dependency blocked it). Next (session 3): export the real
-      model and verify it actually separates same-person from
-      different-person embeddings on the demo video; calibrate
-      `REID_MATCH_THRESHOLD`; `GET /reid/identities/{id}/journey`; Kafka
-      fan-out under `--profile full`
+      wired inline into `/ingest/reid`. Session 3/3: `GET
+      /reid/identities` + `GET /reid/identities/{id}/journey` + minimal
+      "Identities" frontend page; `scripts/calibrate_reid.py` for
+      threshold calibration against real embeddings; real-model export and
+      end-to-end same-camera re-identification proof on the demo video.
+      **Kafka fan-out for the matcher was descoped from this project** (see
+      below) rather than shipped unverified.
+- [ ] Kafka fan-out for the Re-ID matcher (`docs/REID.md` "Transport" table,
+      full-profile row) — descoped, not implemented. The matcher function
+      (`backend/app/services/reid_matcher.py`) is already transport-agnostic
+      by design specifically so this can be added later without changing
+      matching logic: a consumer (or Celery task under the existing
+      `celery-worker` container) would read a `reid-tracks` Kafka topic and
+      call `match_or_create_identity` the same way `/ingest/reid` already
+      does inline. Not built because the full profile can't be verified
+      live on this project's 8 GB target machine, and unverified code paths
+      don't ship here.
 - [ ] Occupancy forecasting (Prophet/ARIMA on analytics_snapshots)
 - [ ] Anomaly detection on traffic/queue series
 - [ ] Heatmap gallery page + report PDF export

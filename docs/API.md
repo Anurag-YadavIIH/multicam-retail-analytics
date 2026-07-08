@@ -66,12 +66,17 @@ other endpoint.
 | POST | /ingest/reid | `{camera_id, track_id, embedding[512]}` - see docs/REID.md. Requires `/ingest/track` to have already run for that track (404 otherwise). Stores the embedding and matches it inline against the active gallery → `{"ok": true, "identity_id": N}` |
 | POST | /cameras/{id}/heartbeat?fps= | health |
 
-## Cross-camera Re-ID
+## Cross-camera Re-ID (viewer+)
 
 `/ingest/reid` above stores embeddings and links tracks to identities inline
-(see `docs/REID.md` for the full design). Planned:
-`GET /reid/identities/{id}/journey` (viewer+) to read back a matched
-identity's cross-camera path - not wired up yet, session 3.
+(see `docs/REID.md` for the full design).
+
+| GET | /reid/identities?min_track_count=2&limit=50 | recently re-identified visitors, most recently seen first |
+| GET | /reid/identities/{id}/journey | one identity's path: `{identity, tracks: [{camera_id, track_id, first_seen, last_seen, trajectory, zones_visited}, ...]}` ordered by `first_seen` |
+
+Kafka fan-out for the matcher (so identities/tracks also update via a
+full-profile consumer, not just inline) is designed in `docs/REID.md` but
+not implemented - see `TASKS.md`.
 
 ## WebSockets (`?token=<access_token>`)
 | /ws/detections/{camera_id} | live boxes + track IDs (normalized bboxes) |
