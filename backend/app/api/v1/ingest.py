@@ -19,6 +19,7 @@ from backend.app.schemas.analytics import IngestDetection
 from backend.app.schemas.reid import ReidIngestIn
 from backend.app.services import metrics
 from backend.app.services.alert_service import evaluate_snapshot
+from backend.app.services.reid_matcher import match_or_create_identity
 from backend.app.services.ws_manager import ws_manager
 
 router = APIRouter(prefix="/ingest", tags=["internal"], include_in_schema=False)
@@ -141,11 +142,14 @@ def ingest_track(body: dict, db: Annotated[Session, Depends(get_db)]) -> dict:
 
 @router.post("/reid", dependencies=[Depends(verify_worker)])
 def ingest_reid(body: ReidIngestIn, db: Annotated[Session, Depends(get_db)]) -> dict:
-    """Store a closed track's Re-ID embedding (see docs/REID.md). Requires
-    /ingest/track to have already been called for this camera_id/track_id -
-    404 otherwise, so the worker knows to retry rather than silently drop it.
-    No matching yet - that's session 3."""
+    """Store a closed track's Re-ID embedding and match it against the active
+    gallery inline (see docs/REID.md - this is the lite-mode transport path;
+    a full-profile deployment can additionally fan this out via Kafka to the
+    same matcher function). Requires /ingest/track to have already been
+    called for this camera_id/track_id - 404 otherwise, so the worker knows
+    to retry rather than silently drop it."""
     track = reid_crud.store_track_embedding(db, body.camera_id, body.track_id, body.embedding)
     if track is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Track not found - send /ingest/track first")
-    return {"ok": True}
+    identity = match_or_create_identity(db, track, body.embedding)
+    return {"ok": True, "identity_id": identity.id}

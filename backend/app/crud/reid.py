@@ -1,9 +1,9 @@
 """Re-ID data layer: identities gallery + track embedding storage/linking.
 
-No matching logic here (see docs/REID.md - that's session 3). This module
-only stores and queries; `link_track_to_identity` and `get_identity_journey`
-aren't called by any route yet, but they're the primitives the future
-matcher and journeys endpoint will use.
+No matching *decisions* here (see backend/app/services/reid_matcher.py for
+the cosine-similarity logic) - this module only stores and links.
+`get_identity_journey` isn't called by any route yet, but it's the primitive
+the future journeys endpoint will use.
 """
 
 from datetime import datetime
@@ -33,6 +33,18 @@ def create_identity(db: Session, embedding: list[float], seen_at: datetime) -> I
     identity = Identity(embedding=embedding, first_seen=seen_at, last_seen=seen_at, track_count=1)
     db.add(identity)
     db.commit()
+    db.refresh(identity)
+    return identity
+
+
+def create_identity_from_track(db: Session, track: Track, embedding: list[float]) -> Identity:
+    """New gallery entry seeded by one track - the matcher's no-match branch.
+    Unlike link_track_to_identity, track_count is not incremented here: it
+    already starts at 1 in create_identity, correctly counting this track."""
+    identity = create_identity(db, embedding, track.last_seen)
+    track.identity_id = identity.id
+    db.commit()
+    db.refresh(track)
     db.refresh(identity)
     return identity
 

@@ -5,9 +5,12 @@ comparing appearance embeddings, so a customer who walks from the entrance
 camera to the checkout camera is recognized as the same person without any
 biometric ID system - just embedding similarity, time, and (later) geometry.
 
-This is a multi-session build. **This document covers the full design; only
-the data layer (models, migration, schemas, CRUD, the ingest endpoint) is
-implemented so far.** Embedding extraction and matching are session 2/3.
+This is a multi-session build. **This document covers the full design.**
+Implemented so far: the data layer (session 1), on-worker OSNet extraction,
+and the matcher wired inline into `/ingest/reid` (session 2 - matching was
+originally planned for session 3, but landed a session early; see "Session
+breakdown"). Remaining: real-model calibration, the `journeys` endpoint, and
+Kafka fan-out under `--profile full` (now session 3).
 
 ## Constraints, and where this design departs from TASKS.md / INFERENCE.md
 
@@ -54,36 +57,63 @@ track closes
   │
   ├─ POST /ingest/track  (existing - track summary, unchanged)
   │
-  └─ POST /ingest/reid   (new, this session - {camera_id, track_id, embedding})
+  └─ POST /ingest/reid   ({camera_id, track_id, embedding})
                                           │
                                           ├─ store embedding on the Track row
-                                          │  (session 1 - this is where it stops today)
                                           │
-                                          └─ [session 2/3] invoke matcher(db, track)
-                                             ├─ lite: called inline, same request
+                                          └─ invoke match_or_create_identity(db, track, embedding)
+                                             ├─ lite: called inline, same request (implemented)
                                              └─ full: also published to a Kafka
                                                 topic; a consumer (or Celery task)
-                                                calls the same matcher function
+                                                calls the same matcher function (session 3)
 ```
 
-### Extraction (vision worker, session 2)
+### Extraction (vision worker) - implemented
 
 - Model: **osnet_x0_25** (the lightest OSNet width variant), exported to ONNX
-  once, offline. `onnxruntime` is already a runtime dependency (used for the
-  detector's optional ONNX path) - Re-ID adds no new runtime dependency.
-  `torchreid`/`torch` are only ever used by the offline export script, never
-  installed in the vision-worker image.
-- Input: the person crop from the track's best frame, resized to OSNet's
-  expected `256×128`, ImageNet-normalized.
-- Output: a **512-dim** float vector, L2-normalized before it's sent.
+  once, offline (`scripts/export_reid_onnx.py`). `onnxruntime` is already a
+  runtime dependency (used for the detector's optional ONNX path) - Re-ID
+  adds no new runtime dependency. `torchreid`/`torch` are only ever used by
+  the offline export script, never installed in the vision-worker image.
+- **Getting the .onnx file into the container:** neither of the two options
+  originally floated (export at Docker build time, or download a
+  pre-exported artifact at build time) is what shipped. Both would add a
+  network dependency to `docker compose build` - `torchreid`'s pretrained
+  weights come from Google Drive via `gdown`, which is well known to be
+  flaky/rate-limited, and a hosted "pre-exported artifact" URL is just
+  another external dependency the build would fail without. Instead: the
+  vision-worker service already bind-mounts `./models:/app/models` in
+  `docker-compose.yml` (used today for heatmap PNGs), so
+  `models/reid/osnet_x0_25.onnx` just needs to exist on the host - produced
+  once by running the export script locally, never during a build. Zero
+  Dockerfile changes, zero build-time network dependency, and it's exactly
+  as reliable as the build already was. If the file is absent,
+  `ReidExtractor` fails soft (`.enabled = False`) and the rest of the
+  pipeline is unaffected. See `models/reid/README.md`.
+- **Best-crop heuristic:** for each active person track, the worker keeps the
+  single frame with the **largest bbox area among frames where detection
+  confidence clears `MIN_CROP_CONFIDENCE` (0.5)** - a cheap proxy for "the
+  subject is closest/most front-on to the camera," recomputed every frame in
+  `CameraPipeline._update_best_crops` and consumed once when the track
+  closes. The crop is copied out **before** face blur is drawn onto the
+  frame (see Privacy considerations), and is discarded (whether or not
+  extraction/ingest succeeds) as soon as the track closes - crops for
+  in-progress tracks are the only ones ever held in memory.
+- Input: the best crop, resized to OSNet's expected `256×128`,
+  ImageNet-normalized (`vision/reid.py:preprocess`).
+- Output: a **512-dim** float vector, L2-normalized before it's sent
+  (`vision/reid.py:ReidExtractor.extract`).
 - Extraction happens once per closed track (not per frame) - cheap enough on
-  CPU at that rate even on this hardware.
+  CPU at that rate even on this hardware. Fails soft throughout: a missing
+  model, a broken crop, or an inference error all just skip that one track's
+  Re-ID (logged), never the tracking pipeline itself.
 
-### Matching (pure function, session 3)
+### Matching (pure function) - implemented, wired inline
 
 `match_or_create_identity(db, track, embedding, *, ttl_hours, threshold) ->
-Identity` - takes a DB session, a track, and its embedding; does the
-following, with no knowledge of Kafka, Redis, or HTTP:
+Identity` (`backend/app/services/reid_matcher.py`) - takes a DB session, a
+track, and its embedding; does the following, with no knowledge of Kafka,
+Redis, or HTTP:
 
 1. Load the **active gallery**: all `identities` with
    `last_seen > now() - ttl_hours` (default 24h - configurable). Rows older
@@ -92,13 +122,16 @@ following, with no knowledge of Kafka, Redis, or HTTP:
    very old ones later, matching the existing Celery retention-purge pattern.
 2. Cosine similarity between the track's embedding and every active
    identity's representative embedding.
-3. Best match above the similarity threshold (tunable; a starting point
-   around 0.6 is typical for OSNet-family embeddings, but the real value
-   needs tuning against this deployment's actual cameras/lighting once
-   session 2 produces real embeddings - not committed to code yet) →
+3. Best match above the similarity threshold (**0.65** by default, tunable
+   via `REID_MATCH_THRESHOLD` - not yet calibrated against real embeddings;
+   that's session 3, once there's real camera footage to tune against) →
    link the track to that identity, update its `last_seen`/`track_count`.
    No match above threshold → create a new identity from this track's
    embedding.
+
+It's wired inline into `/ingest/reid`, immediately after the embedding is
+stored - this **is** the lite-mode transport path described below, not a
+placeholder for it.
 
 **Scale assumption, stated explicitly:** this is `O(gallery size)` cosine
 comparisons per closed track, run inline in the request path in lite mode.
@@ -114,16 +147,16 @@ target scale (a handful of store cameras), so neither is built now.
 
 | Profile | How a closed track's embedding reaches the matcher |
 |---|---|
-| lite (default) | `POST /ingest/reid` stores the embedding, then calls the matcher function inline in the same request |
-| full | same inline call, **plus** the ingest handler publishes to a `reid-tracks` Kafka topic; a consumer (or Celery task) calls the identical matcher function for decoupled/scaled processing |
+| lite (default) | `POST /ingest/reid` stores the embedding, then calls the matcher function inline in the same request - **implemented** |
+| full | same inline call, **plus** the ingest handler publishes to a `reid-tracks` Kafka topic; a consumer (or Celery task) calls the identical matcher function for decoupled/scaled processing - **session 3** |
 
 ### Gallery storage & TTL
 
 The gallery *is* the `identities` table - no separate cache or index. TTL is
 enforced at query time by the matcher (`WHERE last_seen > now() - ttl_hours`),
 not by deleting rows, so identity history remains available for journeys and
-audit indefinitely. The TTL window is configurable (a settings value, added
-when the matcher is built in session 3) precisely because the right value
+audit indefinitely. The TTL window is configurable
+(`REID_GALLERY_TTL_HOURS`, default 24) precisely because the right value
 depends on the deployment (a 24h default suits daily-shopper re-identification;
 a multi-day retail environment might want longer).
 
@@ -176,7 +209,7 @@ New table `identities` (the gallery):
 | Column | Type | Notes |
 |---|---|---|
 | embedding | JSON | this track's own 512-dim vector, set by `/ingest/reid`; `NULL` until then |
-| identity_id | FK → identities.id, `ON DELETE SET NULL`, indexed | `NULL` until the matcher links it (session 3) |
+| identity_id | FK → identities.id, `ON DELETE SET NULL`, indexed | set by the matcher inline in the same `/ingest/reid` request; `NULL` for tracks with no embedding yet |
 
 No pgvector - plain JSON like every other vector-ish column in this schema
 (`trajectory`, `zones_visited`, `zone_occupancy`). Worth revisiting only if
@@ -184,44 +217,56 @@ the gallery ever approaches the scale note above.
 
 ## API surface
 
-### `POST /api/v1/ingest/reid` (internal, `X-Worker-Key`) - implemented this session
+### `POST /api/v1/ingest/reid` (internal, `X-Worker-Key`) - implemented, now with inline matching
 
 ```json
 {"camera_id": 1, "track_id": 42, "embedding": [0.0123, -0.0456, ...]}
 ```
 
+Response: `{"ok": true, "identity_id": 7}` - the identity this track was
+linked to (existing match) or the new one created for it.
+
 `embedding` must be exactly **512** floats - wrong length is a 422, not a
 silent truncation/pad, since a dimension mismatch almost always means the
 worker is running the wrong model version.
 
-**Ordering contract:** the worker must call `POST /ingest/track` for a track
-*before* (or, transitionally while both are being added to the worker in
-session 2, at the same point in the close sequence as) calling
-`/ingest/reid` for it. If `/ingest/reid` arrives for a `(camera_id,
+**Ordering contract, implemented:** the worker calls `POST /ingest/track` for
+a track before calling `/ingest/reid` for it
+(`CameraPipeline._ship`/`_ship_reid_embedding` in
+`streaming/camera_worker.py`). If `/ingest/reid` arrives for a `(camera_id,
 track_id)` pair with no matching `Track` row, it returns **404** rather than
 creating a bare row - a track's required fields (`first_seen`, `duration_s`,
 etc.) come from `/ingest/track`, not from the Re-ID payload. On a 404, the
-**worker** (session 2 code, not implemented yet - this is a contract for that
-future work) should retry once after a short delay rather than drop the
-embedding, to absorb ordinary request-ordering/network jitter between the two
-calls; it should not retry indefinitely or block the pipeline on it.
+worker retries once after a **1 second** delay (`REID_RETRY_DELAY_S`) to
+absorb ordinary request-ordering/network jitter between the two calls, then
+gives up and logs a warning rather than retrying indefinitely or blocking the
+pipeline on it.
 
 ### `GET /api/v1/reid/identities/{id}/journey` (viewer+) - designed, not yet implemented
 
 Returns one identity's cross-camera path: the identity plus its linked tracks
 ordered by `first_seen`, each with `camera_id`, `track_id`, `first_seen`,
 `last_seen`, `trajectory`, `zones_visited` - literally "everywhere this
-appearance was seen, in order." Not implemented yet because until the
-matcher (session 3) links any tracks to identities, there's nothing for it to
-return. The backing query (`get_identity_journey`) is already implemented and
-unit-tested this session, ready for this endpoint to call in a later session.
+appearance was seen, in order." The matcher now actually links tracks to
+identities, so there's real data for this endpoint to return - it's still
+just not wired up yet (session 3). The backing query (`get_identity_journey`)
+is already implemented and unit-tested (session 1), ready for this endpoint
+to call.
 
 ## Session breakdown
 
-1. **This session:** design doc, `identities` table, `tracks.embedding` /
-   `tracks.identity_id`, `POST /ingest/reid`, CRUD, tests.
-2. **Session 2:** OSNet ONNX export script, on-worker extraction, worker
-   sends `/ingest/reid` (with the retry-once-on-404 behavior above).
-3. **Session 3:** the matcher function, inline invocation from
-   `/ingest/reid`, the `journeys` endpoint, Kafka fan-out under
-   `--profile full`.
+1. **Session 1 (done):** design doc, `identities` table, `tracks.embedding` /
+   `tracks.identity_id`, `POST /ingest/reid` (embedding storage only), CRUD,
+   tests.
+2. **Session 2 (done):** OSNet ONNX export script; on-worker extraction
+   (best-crop heuristic, preprocessing, ONNX Runtime inference, fail-soft
+   throughout); the worker sends `/ingest/reid` with the retry-once-on-404
+   behavior; **and** the matcher function, wired inline into `/ingest/reid` -
+   originally scoped for session 3, moved up because lite-mode matching has
+   no transport dependency to build first. Mocked-model/pure-function tests
+   throughout; no real inference run anywhere in this session.
+3. **Session 3 (remaining):** real-model verification - export the actual
+   ONNX model and confirm it produces closer embeddings for the same person
+   across the demo video than for different people; calibrate
+   `REID_MATCH_THRESHOLD` against that; the `journeys` endpoint; Kafka
+   fan-out under `--profile full`.

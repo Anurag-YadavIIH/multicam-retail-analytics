@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     first_admin_email: str = "admin@retail.local"
     first_admin_password: str = "admin12345"
 
+    # cross-camera re-id (see docs/REID.md) - threshold default not yet
+    # calibrated against real embeddings; that's session 3
+    reid_gallery_ttl_hours: float = 24.0
+    reid_match_threshold: float = 0.65
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

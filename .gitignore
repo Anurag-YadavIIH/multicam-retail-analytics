@@ -15,6 +15,8 @@ models/heatmaps/*.png
 models/*.pt
 models/*.onnx
 models/*.engine
+models/reid/*
+!models/reid/README.md
 datasets/**
 !datasets/README.md
 mlruns/

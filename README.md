@@ -73,6 +73,7 @@ docker compose --profile full up -d --build
 | WebSockets: detections/alerts/analytics | `backend/app/api/v1/ws.py` |
 | Live MJPEG preview + snapshot (Redis frame cache) | `backend/app/api/v1/cameras.py`, `vision/preview.py` |
 | Zone editor (draw/edit polygons over a snapshot, plain SVG) | `frontend/src/components/ZoneEditor.tsx` |
+| Cross-camera Re-ID: on-worker OSNet embeddings, inline gallery matcher | `vision/reid.py`, `backend/app/services/reid_matcher.py`, `docs/REID.md` |
 | Kafka event bus (optional) | `streaming/kafka_client.py` |
 | Celery: health sweeps, daily reports, retention | `backend/app/services/tasks.py` |
 | Prometheus metrics + Grafana dashboard | `monitoring/` |
@@ -96,7 +97,7 @@ with MLflow tracking: `docs/TRAINING.md`.
 ```bash
 pip install -r backend/requirements.txt -r vision/requirements.txt
 pip install pytest pytest-cov ruff black
-pytest                       # 105 tests, ~90% coverage on backend/analytics/tracking/vision
+pytest                       # 126 tests, ~90% coverage on backend/analytics/tracking/vision
 ruff check . && black .
 cd frontend && npm install && npm run dev
 ```

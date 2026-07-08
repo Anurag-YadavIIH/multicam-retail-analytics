@@ -19,12 +19,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+import numpy as np
 import redis
 
 from analytics.engine import AnalyticsEngine
 from analytics.zones import ZoneDef
 from streaming.kafka_client import DetectionProducer
 from tracking.tracker import ByteTracker
+from vision import reid
 from vision.detector import YoloDetector
 from vision.preview import annotate, encode_jpeg
 from vision.privacy import blur_faces
@@ -50,6 +52,8 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 PREVIEW_FPS = float(os.getenv("PREVIEW_FPS", "3"))
 PREVIEW_TTL_S = 5
 PREVIEW_JPEG_QUALITY = 70
+REID_MODEL_PATH = os.getenv("REID_MODEL_PATH", "models/reid/osnet_x0_25.onnx")
+REID_RETRY_DELAY_S = 1.0  # absorbs /ingest/track vs /ingest/reid ordering jitter - see docs/REID.md
 
 
 def fetch_cameras(client: httpx.Client) -> list[dict]:
@@ -75,12 +79,14 @@ class CameraPipeline(threading.Thread):
         detector: YoloDetector,
         producer: DetectionProducer,
         redis_client: redis.Redis,
+        reid_extractor: reid.ReidExtractor,
     ) -> None:
         super().__init__(daemon=True, name=f"cam-{camera['id']}")
         self.camera = camera
         self.detector = detector
         self.producer = producer
         self.redis = redis_client
+        self.reid_extractor = reid_extractor
         self.source = VideoSource(camera["source"], camera["type"], FRAME_WIDTH)
         self.tracker = ByteTracker(fps=INFER_FPS)
         self.engine: AnalyticsEngine | None = None
@@ -89,6 +95,8 @@ class CameraPipeline(threading.Thread):
         self._last_heartbeat = 0.0
         self._last_heatmap = time.time()
         self._last_preview_push = 0.0
+        self._best_crop: dict[int, np.ndarray] = {}
+        self._best_crop_area: dict[int, float] = {}
 
     def run(self) -> None:
         cam_id = self.camera["id"]
@@ -111,6 +119,7 @@ class CameraPipeline(threading.Thread):
 
             detections = self.detector.detect(frame)
             tracked = self.tracker.update(detections)
+            self._update_best_crops(tracked, frame)
             if FACE_BLUR:
                 blur_faces(frame, [t.bbox for t in tracked if t.class_name == "person"])
             self._maybe_push_preview(cam_id, frame, tracked)
@@ -165,6 +174,50 @@ class CameraPipeline(threading.Thread):
                     self.client.post(f"{BACKEND_URL}/api/v1/ingest/track", json=closed)
                 except httpx.HTTPError:
                     logger.warning("track POST failed")
+                self._ship_reid_embedding(cam_id, closed)
+
+    def _update_best_crops(self, tracked, frame) -> None:
+        """Track each person's best-so-far crop (largest bbox area among
+        frames clearing the confidence floor) for Re-ID extraction on track
+        close - see docs/REID.md. Copied *before* face blur is drawn, so the
+        stored crop isn't affected by the in-place blur mutation below."""
+        for t in tracked:
+            if t.class_name != "person" or t.confidence < reid.MIN_CROP_CONFIDENCE:
+                continue
+            area = reid.bbox_area(t.bbox)
+            if area <= self._best_crop_area.get(t.track_id, 0.0):
+                continue
+            crop = reid.crop_bbox(frame, t.bbox)
+            if crop.size == 0:
+                continue
+            self._best_crop_area[t.track_id] = area
+            self._best_crop[t.track_id] = crop.copy()
+
+    def _ship_reid_embedding(self, cam_id: int, closed_track: dict) -> None:
+        """Extract + POST the Re-ID embedding for a just-closed track. Fails
+        soft throughout - never raises into the tracking pipeline. Retries
+        once on 404 (ordering jitter vs the /ingest/track call above), per
+        the contract in docs/REID.md; gives up otherwise."""
+        track_id = closed_track["track_id"]
+        crop = self._best_crop.pop(track_id, None)
+        self._best_crop_area.pop(track_id, None)
+        if crop is None or not self.reid_extractor.enabled:
+            return
+        embedding = self.reid_extractor.extract(crop)
+        if embedding is None:
+            return
+        payload = {"camera_id": cam_id, "track_id": track_id, "embedding": embedding}
+        for attempt in range(2):
+            try:
+                resp = self.client.post(f"{BACKEND_URL}/api/v1/ingest/reid", json=payload)
+            except httpx.HTTPError:
+                logger.warning("reid ingest POST failed (backend down?)")
+                return
+            if resp.status_code != 404:
+                return
+            if attempt == 0:
+                time.sleep(REID_RETRY_DELAY_S)
+        logger.warning("reid ingest 404 after retry for track %s - dropped", track_id)
 
     def _maybe_push_preview(self, cam_id: int, frame, tracked) -> None:
         """Cache the latest annotated JPEG in Redis for the MJPEG/snapshot endpoints.
@@ -206,6 +259,7 @@ def main() -> None:
     detector = YoloDetector(MODEL, DEVICE, CONF, IOU)
     producer = DetectionProducer(KAFKA_SERVERS, KAFKA_ENABLED)
     redis_client = redis.Redis.from_url(REDIS_URL)
+    reid_extractor = reid.ReidExtractor(REID_MODEL_PATH)  # fails soft if the model is absent
     client = httpx.Client(timeout=10)
     cameras: list[dict] = []
     for attempt in range(30):
@@ -218,7 +272,9 @@ def main() -> None:
     if not cameras:
         logger.error("no active cameras found; add one via the API/dashboard")
         return
-    threads = [CameraPipeline(cam, detector, producer, redis_client) for cam in cameras]
+    threads = [
+        CameraPipeline(cam, detector, producer, redis_client, reid_extractor) for cam in cameras
+    ]
     for t in threads:
         t.start()
     for t in threads:
