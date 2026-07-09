@@ -18,22 +18,29 @@ Tailwind + Recharts · MinIO · MLflow · DVC · Prometheus · Grafana · GitHub
 <tr>
 <td width="50%">
 <img src="docs/images/dashboard.png" alt="Ops dashboard" width="100%">
-<em>Live KPIs, traffic trend, and alert feed.</em>
+<em>Live KPIs and traffic trend.</em>
 </td>
 <td width="50%">
-<img src="docs/images/live-detection.png" alt="Live detection overlay" width="100%">
-<em>YOLO11 + ByteTrack boxes and track IDs on the live feed.</em>
+<img src="docs/images/alert-feed.png" alt="Live alert feed" width="100%">
+<em>Detection → zone → threshold → alert, firing live in the feed - see docs/DEMO.md.</em>
 </td>
 </tr>
 <tr>
 <td width="50%">
+<img src="docs/images/live-detection.png" alt="Live detection overlay" width="100%">
+<em>YOLO11 + ByteTrack boxes and track IDs on the live feed.</em>
+</td>
+<td width="50%">
 <img src="docs/images/zone-editor.png" alt="Zone editor" width="100%">
 <em>Draw a queue/entrance/aisle polygon over the camera snapshot — no code, no restart.</em>
 </td>
+</tr>
+<tr>
 <td width="50%">
 <img src="docs/images/identities.png" alt="Cross-camera identities" width="100%">
 <em>Re-identified visitors and their tracked journey across sightings.</em>
 </td>
+<td width="50%"></td>
 </tr>
 </table>
 

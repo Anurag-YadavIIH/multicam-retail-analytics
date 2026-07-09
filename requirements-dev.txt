@@ -1,0 +1,3 @@
+# Dev-only tooling, never installed into the backend/vision runtime images.
+# pip install -r requirements-dev.txt && playwright install chromium
+playwright==1.61.0

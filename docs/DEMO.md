@@ -124,3 +124,35 @@ day's shape, not just a rising line from zero), the input that actually
 gets you there is a longer-running or higher-traffic video source, not a
 config change - the pipeline itself already computes and stores everything
 correctly at whatever traffic the source actually shows.
+
+## Regenerating the README screenshots
+
+`scripts/capture_screenshots.py` drives a real headless Chromium against the
+running lite stack and writes all six `docs/images/*.png` - never hand
+-captured, and never on a timer: each shot waits on a real condition (a
+non-zero KPI, an actual bounding box drawn on the canvas, a fresh alert
+arriving over the WebSocket, ...) with a real timeout, and fails loudly
+with a specific message rather than silently capturing an empty state.
+
+Prerequisites (Windows, PowerShell):
+
+```powershell
+pip install -r requirements-dev.txt
+playwright install chromium
+python scripts/download_sample_video.py
+docker compose up -d --build postgres redis backend vision-worker frontend
+```
+
+Then, once that's up (give it a couple of minutes so `checkout-queue-demo`
+has already fired at least one alert - see the timeline above; the script
+will still wait for a *fresh* one, up to 6 minutes, but starting cold makes
+that the longest part of the run):
+
+```powershell
+python -m scripts.capture_screenshots
+```
+
+Useful flags: `--headed` to watch the browser instead of running headless,
+`--only dashboard,identities` to re-run a subset while iterating. The
+script only writes into `docs/images/` - it never runs `git add` itself;
+look at what it produced before committing.
