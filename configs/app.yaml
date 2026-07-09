@@ -1,5 +1,8 @@
 alerts:
-  queue_length_threshold: 6
+  # 3, not a more conservative 6, so a small real queue actually crosses it
+  # on the demo footage - see docs/DEMO.md for why this value, not an
+  # inflated one, and how it was chosen.
+  queue_length_threshold: 3
   crowding_people_threshold: 25
   camera_offline_seconds: 60
 analytics:

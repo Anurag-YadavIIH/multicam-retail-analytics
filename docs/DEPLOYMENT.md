@@ -31,6 +31,47 @@ Any 4 vCPU / 16 GB VM: install docker, clone, `.env` with strong `SECRET_KEY` an
 password, `docker compose --profile full up -d`, put Caddy/nginx with TLS in front of
 :5173 and :8000.
 
+## Testing with a phone as an RTSP camera
+
+Every camera in this repo's demos so far is a looping video file - genuine
+live detection, and the `VideoSource` reconnect path for a real,
+occasionally-flaky stream, has never actually been exercised. A phone
+running an IP-camera app is a real RTSP source and the fastest way to do
+that without buying hardware.
+
+**Android - [IP Webcam](https://play.google.com/store/apps/details?id=com.pas.webcam)
+(free):**
+
+1. Install it, open it, scroll down and tap **Start server**.
+2. It shows an IP:port, e.g. `192.168.1.57:8080` - that's the phone's address
+   on your LAN, not a public one.
+3. RTSP URL: `rtsp://192.168.1.57:8080/h264_ulaw.sdp` (or `h264_pcm.sdp` -
+   both are exposed out of the box).
+
+**iOS - [OctoStream RTSP Streamer](https://apps.apple.com/us/app/octostream-rtsp-streamer/id6474928937)
+(free):**
+
+1. Install it, open it, select your camera feed.
+2. It displays the RTSP URL directly in the app - use that as-is.
+
+**Register it** (phone and the machine running `docker compose` must be on
+the same Wi-Fi/LAN):
+
+- Dashboard → Cameras → Add camera → `type: rtsp`, `source:` the URL above, or
+- `configs/cameras.example.yaml` + `python scripts/register_cameras.py`
+  (see the file for the exact entry shape - the RTSP example there is a
+  placeholder; put your phone's real URL in its `source` field).
+
+No Docker network changes needed: the vision-worker container reaches the
+phone the same way any outbound connection from the container reaches your
+LAN, on the default bridge network.
+
+**What this actually tests that the demo video can't:** walk out of Wi-Fi
+range, lock the phone's screen, or force-close the app, and watch
+`vision/video_source.py`'s reconnect logic in `docker compose logs -f
+vision-worker` (`stream lost (...), reconnecting`) - then bring the stream
+back and confirm it picks back up without restarting the worker.
+
 ## Production checklist
 - [ ] Rotate `SECRET_KEY`, DB, MinIO, Grafana credentials
 - [ ] Restrict CORS origins

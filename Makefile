@@ -18,8 +18,9 @@ migrate:
 seed:
 	docker compose exec backend python -m scripts.seed_db
 
-demo:
+demo:          ## Fetch clips + bring up the lite stack - seeds itself, see docs/DEMO.md
 	python scripts/download_sample_video.py
+	docker compose up -d --build postgres redis backend vision-worker frontend
 
 test:
 	pytest

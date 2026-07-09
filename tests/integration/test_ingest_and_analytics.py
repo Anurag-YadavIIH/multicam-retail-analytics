@@ -57,7 +57,7 @@ def test_ingest_requires_worker_key(client, admin_token):
 
 def test_ingest_creates_snapshot_and_alert(client, admin_token):
     cam_id = _create_camera(client, admin_token)
-    resp = _ingest(client, cam_id, queue=7)  # above threshold 6 -> high_queue alert
+    resp = _ingest(client, cam_id, queue=7)  # above the queue_length threshold -> high_queue alert
     assert resp.status_code == 200
     assert resp.json()["alerts"] >= 1
 

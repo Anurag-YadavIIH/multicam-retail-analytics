@@ -3,7 +3,12 @@ from datetime import UTC, datetime, timedelta
 from backend.app.models import Camera, CameraStatus, Detection
 from backend.app.models.event import AlertSeverity, AlertType
 from backend.app.services import tasks
-from backend.app.services.alert_service import _safe, raise_alert
+from backend.app.services.alert_service import (
+    DEFAULT_THRESHOLDS,
+    _safe,
+    load_thresholds,
+    raise_alert,
+)
 
 
 def test_health_sweep_flags_stale_camera(db_session, monkeypatch):
@@ -82,3 +87,25 @@ def test_raise_alert_dedup(db_session):
 
 def test_safe_swallows_exceptions():
     _safe(lambda: 1 / 0)  # must not raise
+
+
+def test_load_thresholds_defaults_when_file_missing(tmp_path):
+    assert load_thresholds(tmp_path / "does-not-exist.yaml") == DEFAULT_THRESHOLDS
+
+
+def test_load_thresholds_reads_yaml_overrides(tmp_path):
+    config = tmp_path / "app.yaml"
+    config.write_text("alerts:\n  queue_length_threshold: 3\n  camera_offline_seconds: 30\n")
+
+    thresholds = load_thresholds(config)
+
+    assert thresholds["queue_length"] == 3
+    assert thresholds["camera_offline_s"] == 30
+    assert thresholds["crowding_people"] == DEFAULT_THRESHOLDS["crowding_people"]  # unset - default
+
+
+def test_load_thresholds_ignores_malformed_alerts_section(tmp_path):
+    config = tmp_path / "app.yaml"
+    config.write_text("alerts: not-a-mapping\n")
+
+    assert load_thresholds(config) == DEFAULT_THRESHOLDS

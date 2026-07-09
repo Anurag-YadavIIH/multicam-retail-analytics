@@ -8,8 +8,10 @@ import logging
 import smtplib
 from datetime import UTC, datetime, timedelta
 from email.mime.text import MIMEText
+from pathlib import Path
 
 import httpx
+import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,11 +22,37 @@ logger = logging.getLogger(__name__)
 
 DEDUP_WINDOW = timedelta(minutes=5)
 
-THRESHOLDS = {
+DEFAULT_THRESHOLDS = {
     "queue_length": 6,
     "crowding_people": 25,
     "camera_offline_s": 60,
 }
+
+# configs/app.yaml key -> THRESHOLDS key
+_YAML_KEYS = {
+    "queue_length_threshold": "queue_length",
+    "crowding_people_threshold": "crowding_people",
+    "camera_offline_seconds": "camera_offline_s",
+}
+
+
+def load_thresholds(path: str | Path = "configs/app.yaml") -> dict[str, int]:
+    """Same fail-soft pattern as vision/detector.py's load_class_map: read
+    configs/app.yaml so ops can tune thresholds without a deploy, falling
+    back to DEFAULT_THRESHOLDS if the file is missing or malformed."""
+    p = Path(path)
+    thresholds = dict(DEFAULT_THRESHOLDS)
+    if p.exists():
+        data = yaml.safe_load(p.read_text()) or {}
+        alerts = data.get("alerts")
+        if isinstance(alerts, dict):
+            for yaml_key, threshold_key in _YAML_KEYS.items():
+                if yaml_key in alerts:
+                    thresholds[threshold_key] = alerts[yaml_key]
+    return thresholds
+
+
+THRESHOLDS = load_thresholds()
 
 
 def _recent_duplicate(db: Session, type_: AlertType, camera_id: int | None) -> bool:

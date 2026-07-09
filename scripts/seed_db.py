@@ -60,6 +60,34 @@ def main() -> None:
                 ]
             )
             log.info("created demo camera + zones")
+
+        if db.scalar(select(Camera).where(Camera.name == "checkout-queue-demo")) is None:
+            # Deliberately separate from demo-entrance: that clip maxes out at
+            # ~3 concurrent people (measured), too sparse to reliably cross a
+            # defensible queue threshold. This one (queue_demo.mp4) has a
+            # real, steady 4 people for its whole length, so the queue zone
+            # below - covering where their (seated, occluded-below-the-desk)
+            # foot-points actually land - reliably alerts. See docs/DEMO.md.
+            cam = Camera(
+                name="checkout-queue-demo",
+                source="datasets/samples/queue_demo.mp4",
+                type=CameraType.file,
+                location="Checkout queue (dense demo clip)",
+                fps_target=5,
+            )
+            db.add(cam)
+            db.flush()
+            db.add_all(
+                [
+                    Zone(
+                        camera_id=cam.id,
+                        name="checkout-queue",
+                        type=ZoneType.queue,
+                        polygon=[[0.0, 0.5], [1.0, 0.5], [1.0, 1.0], [0.0, 1.0]],
+                    ),
+                ]
+            )
+            log.info("created checkout-queue-demo camera + zone")
         db.commit()
     log.info("seed complete")
 

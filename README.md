@@ -67,21 +67,28 @@ Requirements: Docker Desktop, ~6 GB free RAM, ~8 GB disk.
 
 ```bash
 cp .env.example .env
-python scripts/download_sample_video.py        # fetches a retail demo clip
+python scripts/download_sample_video.py        # fetches two demo clips
 docker compose up -d --build postgres redis backend vision-worker frontend
 ```
+
+(or just `make demo`, which does the same two commands)
 
 | URL | What | Login |
 |---|---|---|
 | http://localhost:5173 | Ops dashboard | admin@retail.local / admin12345 |
 | http://localhost:8000/docs | Swagger / OpenAPI | JWT via /auth/login |
 
-The seeded `demo-entrance` camera plays the sample video on loop; within a minute you'll
-see live detections streaming on the dashboard, traffic charts filling in, and Re-ID
-matches accumulating.
+Two cameras get seeded automatically: `demo-entrance` (general pipeline + Re-ID) and
+`checkout-queue-demo`, a busier clip whose real, steady occupancy reliably crosses the
+queue-alert threshold - measured at **~110 seconds** from container start to a live alert
+in the dashboard's feed, dispatched to any webhook/Slack you've configured. Full
+play-by-play of what to watch for and when, plus how the threshold was chosen (real
+measurements, not a guess): [docs/DEMO.md](docs/DEMO.md).
 
 Full profile (Kafka, MinIO, MLflow, Prometheus, Grafana, Celery — ~12 GB RAM):
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Want to point this at a real camera instead of
+the demo clips? A phone running an IP-camera app works as a genuine RTSP source and
+exercises the reconnect path the demo video never does — [docs/DEPLOYMENT.md#testing-with-a-phone-as-an-rtsp-camera](docs/DEPLOYMENT.md#testing-with-a-phone-as-an-rtsp-camera).
 
 ## What's proven vs. what's designed
 
@@ -106,14 +113,14 @@ Python 3.12 · FastAPI · SQLAlchemy 2 · PostgreSQL · Redis · Celery · Kafka
 Ultralytics YOLO11 · ByteTrack (supervision) · ONNX Runtime · React + TypeScript + Vite +
 Tailwind + Recharts · MinIO · MLflow · DVC · Prometheus · Grafana · GitHub Actions
 
-**Engineering practices:** 144 tests, 91% coverage on backend/analytics/tracking/vision,
+**Engineering practices:** 149 tests, 91% coverage on backend/analytics/tracking/vision,
 enforced in CI alongside ruff/black; CI's Trivy scan caught a real critical `torch.load`
 RCE (CVE-2025-32434) before it shipped; embeddable video/WebSocket auth uses ~60s
 camera-scoped tokens instead of the full access token, so a leaked dashboard URL can't
 grant broader API access.
 
-Docs: [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) ·
-[Deployment](docs/DEPLOYMENT.md) · [Training](docs/TRAINING.md) ·
+Docs: [Demo walkthrough](docs/DEMO.md) · [Architecture](docs/ARCHITECTURE.md) ·
+[API](docs/API.md) · [Deployment](docs/DEPLOYMENT.md) · [Training](docs/TRAINING.md) ·
 [Inference](docs/INFERENCE.md) · [Re-ID design](docs/REID.md) ·
 [Developer guide](docs/DEVELOPER_GUIDE.md) · [Contributing](docs/CONTRIBUTING.md)
 

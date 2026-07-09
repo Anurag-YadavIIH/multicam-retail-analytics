@@ -4,7 +4,7 @@ Nothing here is committed to git (see .gitignore). Use `python scripts/download_
 
 | Dataset | Use in this project | How to get |
 |---|---|---|
-| Intel sample retail videos | Demo camera feed | `python scripts/download_sample_video.py` (automatic) |
+| Intel sample retail videos ([intel-iot-devkit/sample-videos](https://github.com/intel-iot-devkit/sample-videos), CC BY 4.0) | Demo camera feeds (`retail_demo.mp4`, `queue_demo.mp4`) - see `docs/DEMO.md` | `python scripts/download_sample_video.py` (automatic) |
 | Kaggle: retail store people detection | Fine-tune person/staff detector | `--dataset kaggle-retail` (needs Kaggle API token) |
 | Kaggle: Retail Product Checkout (RPC) | Product recognition at checkout | `--dataset kaggle-rpc` |
 | SKU-110K | Dense shelf product detection | `--dataset sku110k` (13 GB) |

@@ -1,14 +1,20 @@
-# Optional bulk camera registration (scripts/register_cameras.py)
+# Optional bulk camera registration (scripts/register_cameras.py).
+#
+# The first two entries are illustrative only - replace the placeholder
+# rtsp:// URL and USB device index with a real one before registering, or
+# they'll register successfully but sit permanently offline (nothing wrong
+# with the app; there's just nothing at those addresses on your network).
+# `demo-file` is real and will actually work as registered.
 cameras:
-  - name: entrance-1
+  - name: example-rtsp-camera (not connected)
     source: rtsp://user:pass@192.168.1.10:554/stream1
     type: rtsp
-    location: Main entrance
+    location: Example only - replace with a real RTSP URL
     fps_target: 5
-  - name: usb-test
+  - name: example-usb-camera (not connected)
     source: "0"
     type: usb
-    location: Dev laptop webcam
+    location: Example only - replace with a real device index
   - name: demo-file
     source: datasets/samples/retail_demo.mp4
     type: file
