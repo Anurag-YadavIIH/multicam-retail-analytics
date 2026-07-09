@@ -15,10 +15,11 @@ was never written, because this project's 8 GB target machine can't run
 ship here.
 
 Implemented: the data layer (session 1); on-worker OSNet extraction and the
-matcher wired inline into `/ingest/reid` (session 2). Session 3 (in
-progress): the `journeys`/list read endpoints, a calibration script, the
-real exported model, and threshold calibration against it. See "Session
-breakdown" for exactly what's done vs. pending as this session progresses.
+matcher wired inline into `/ingest/reid` (session 2); the `journeys`/list
+read endpoints, the calibration script, the real exported model, and
+threshold calibration against it (session 3 - done). See "Session
+breakdown" for the full account, including the demo video's calibration
+caveat.
 
 ## Constraints, and where this design departs from TASKS.md / INFERENCE.md
 
@@ -136,12 +137,11 @@ Redis, or HTTP:
    very old ones later, matching the existing Celery retention-purge pattern.
 2. Cosine similarity between the track's embedding and every active
    identity's representative embedding.
-3. Best match above the similarity threshold (**0.65** by default, tunable
-   via `REID_MATCH_THRESHOLD` - not yet calibrated against real embeddings;
-   that's session 3, once there's real camera footage to tune against) →
-   link the track to that identity, update its `last_seen`/`track_count`.
-   No match above threshold → create a new identity from this track's
-   embedding.
+3. Best match above the similarity threshold (**0.83** by default, tunable
+   via `REID_MATCH_THRESHOLD` - see "Session breakdown" below for how it was
+   picked and, separately, how it was validated) → link the track to that
+   identity, update its `last_seen`/`track_count`. No match above threshold
+   → create a new identity from this track's embedding.
 
 It's wired inline into `/ingest/reid`, immediately after the embedding is
 stored - this **is** the lite-mode transport path described below, not a
@@ -288,15 +288,59 @@ other viewer+ route already uses.
    originally scoped for session 3, moved up because lite-mode matching has
    no transport dependency to build first. Mocked-model/pure-function tests
    throughout; no real inference run anywhere in this session.
-3. **Session 3 (in progress):** `GET /reid/identities` + `.../journey` and
-   the "Identities" frontend page (done); `scripts/calibrate_reid.py`
-   (done - a two-phase extract-then-calibrate harness, pure-function
-   distribution math manually verified since `scripts/` isn't
-   unit-tested anywhere in this project); exporting the real ONNX model,
-   running calibration against it, and confirming same-camera
-   re-identification works end-to-end on the demo video (pending - blocked
-   on the export, which runs in a throwaway Docker container on the
-   operator's machine, not in CI or this session). **Kafka fan-out under `--profile
+3. **Session 3 (done):** `GET /reid/identities` + `.../journey` and the
+   "Identities" frontend page; `scripts/calibrate_reid.py` (a two-phase
+   extract-then-calibrate harness; its pure `compute_report` function is
+   unit-tested in `tests/unit/test_calibrate_reid.py`, plus `output_dim` and
+   `onnxruntime`-version checks so a shape/runtime mismatch fails loudly
+   rather than silently producing garbage embeddings); the real ONNX export
+   (in a throwaway, offline-only Docker container pinned to torch 2.1.2 -
+   torch>=2.6 flips `torch.load`'s `weights_only` default and breaks
+   torchreid's checkpoint loading, confirmed via the still-open
+   [deep-person-reid#592](https://github.com/KaiyangZhou/deep-person-reid/issues/592);
+   this has zero effect on the vision-worker image, which stays on
+   torch==2.6.0/the CVE-2025-32434 fix, since only the resulting `.onnx`
+   file crosses that boundary).
+
+   **The evidence the 0.83 threshold works is a live run, not the
+   calibration.** With the threshold wired in, the real stack (`docker
+   compose up -d postgres redis backend vision-worker`, real exported model
+   mounted) ran continuously against the looping demo video. `VideoSource`
+   loops file sources by default, so the same 7 people recur every ~50s
+   loop as fresh track IDs - real repeat sightings, not synthetic ones.
+   Result, from `GET /reid/identities` on the running stack after several
+   hours of continuous operation: 4 identities, with track counts of 36,
+   18, 9, and 1 - the same real people kept getting correctly re-matched to
+   their own identity loop after loop, while staying correctly separated
+   from each other (zero false merges across the 4 identities). That is
+   the proof the calibrated value holds up under many independent, real
+   repeat sightings over time.
+
+   **How 0.83 was picked in the first place** (not the proof above, just
+   the starting point): `scripts/calibrate_reid.py`, run inside the actual
+   `vision-worker` image so it reflects the exact `onnxruntime==1.20.1`
+   pinned in `vision/requirements.txt`, against real OSNet embeddings from
+   the demo video's 7 distinct people - different-person cosine similarity
+   ranged 0.538-0.711 across all 21 cross-person pairs. The video (596
+   frames, ~50s, 12fps) has nobody re-entering frame within a single pass,
+   so there was no independent real repeat-sighting to calibrate a
+   same-person data point against; that one data point (similarity 0.941)
+   is a synthetic augmentation (mirror + brightness/scale jitter) of a real
+   extracted crop run back through the same extractor, not a second genuine
+   sighting. It's a reasonable way to pick a starting threshold from real
+   model output, but on its own it doesn't demonstrate the threshold
+   actually works - the live run above does that.
+
+   **Demo limitation, stated plainly:** the bundled demo video is a single
+   camera (`demo-entrance`), so everything above demonstrates **same-camera**
+   re-identification only. `match_or_create_identity` matches purely on
+   embedding similarity against the whole active gallery, with no
+   camera-specific gating - so the architecture is cross-camera-ready by
+   design - but nothing in this repo's demo exercises a second camera. That
+   would need real (or synthetic) multi-camera footage of the same people
+   to demonstrate; this session doesn't claim to have done that.
+
+   **Kafka fan-out under `--profile
    full` was descoped from this session** (and this project) rather than
    shipped unverified - see "Constraints" #1, "Transport" above, and
    `TASKS.md`.

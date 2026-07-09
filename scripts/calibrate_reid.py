@@ -20,9 +20,11 @@ and has been filled in yet:
    then reports the cosine similarity distribution for same-person pairs vs.
    different-person pairs and recommends a threshold.
 
-Usage:
-    python scripts/calibrate_reid.py
-    python scripts/calibrate_reid.py --video path/to/other.mp4
+Usage (run as a module, not `python scripts/calibrate_reid.py` - the latter
+puts scripts/ itself on sys.path instead of the repo root, so `tracking`/
+`vision` fail to import):
+    python -m scripts.calibrate_reid
+    python -m scripts.calibrate_reid --video path/to/other.mp4
 """
 
 import argparse
@@ -43,6 +45,8 @@ OUT_DIR = Path("models/reid/calibration_crops")
 EMBEDDINGS_FILE = OUT_DIR / "embeddings.json"
 LABELS_FILE = OUT_DIR / "labels.json"
 UNLABELED = "UNLABELED"
+EXPECTED_EMBEDDING_DIM = 512  # vision/reid.py and the /ingest/reid schema both assume this
+PINNED_ORT_VERSION = "1.20.1"  # vision/requirements.txt - the worker's actual runtime
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -55,10 +59,26 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 def extract(video_path: str, model_path: str, max_frames: int) -> None:
+    import onnxruntime as ort  # lazy - not installed in the lint-test/CI env, see docs/REID.md
+
+    if ort.__version__ != PINNED_ORT_VERSION:
+        print(
+            f"WARNING: onnxruntime {ort.__version__} is installed, but the vision "
+            f"worker runs onnxruntime=={PINNED_ORT_VERSION} (vision/requirements.txt). "
+            "Install the pinned version so calibration reflects production behavior."
+        )
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     extractor = ReidExtractor(model_path)
     if not extractor.enabled:
         raise SystemExit(f"No Re-ID model at {model_path} - export it first (see docs/REID.md).")
+    if extractor.output_dim != EXPECTED_EMBEDDING_DIM:
+        raise SystemExit(
+            f"Model at {model_path} outputs {extractor.output_dim}-dim embeddings, but "
+            f"vision/reid.py and the /ingest/reid schema assume {EXPECTED_EMBEDDING_DIM}. "
+            "Re-export the correct model, or update both before calibrating - a silent "
+            "shape mismatch would otherwise produce garbage embeddings, not an error."
+        )
 
     detector = YoloDetector(device="cpu")
     tracker = ByteTracker(fps=5)

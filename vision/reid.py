@@ -62,6 +62,17 @@ class ReidExtractor:
     def enabled(self) -> bool:
         return self.session is not None
 
+    @property
+    def output_dim(self) -> int | None:
+        """Model's embedding dim (last axis of its output shape), or None if
+        disabled. Lets callers - namely scripts/calibrate_reid.py - assert
+        this matches the 512 that vision/reid.py and the /ingest/reid schema
+        both assume, before trusting anything extracted through this session."""
+        if not self.enabled:
+            return None
+        dim = self.session.get_outputs()[0].shape[-1]
+        return dim if isinstance(dim, int) else None
+
     def extract(self, crop_bgr: np.ndarray) -> list[float] | None:
         """512-dim, L2-normalized embedding for one person crop, or None if
         disabled or this crop fails to process."""

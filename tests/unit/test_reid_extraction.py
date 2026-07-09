@@ -14,11 +14,15 @@ from vision.reid import ReidExtractor, bbox_area, crop_bbox, preprocess
 
 
 class FakeSession:
-    def __init__(self, output: np.ndarray):
+    def __init__(self, output: np.ndarray, output_dim: int | None = None):
         self._output = output
+        self._output_dim = output.shape[-1] if output_dim is None else output_dim
 
     def get_inputs(self):
         return [types.SimpleNamespace(name="input")]
+
+    def get_outputs(self):
+        return [types.SimpleNamespace(shape=["batch", self._output_dim])]
 
     def run(self, output_names, feed):
         return [self._output]
@@ -89,6 +93,28 @@ def test_extractor_fails_soft_on_inference_error(monkeypatch):
 
     assert extractor.enabled is True  # construction succeeded
     assert extractor.extract(np.zeros((10, 10, 3), dtype=np.uint8)) is None
+
+
+def test_output_dim_none_when_disabled():
+    extractor = ReidExtractor("does/not/exist.onnx")
+
+    assert extractor.output_dim is None
+
+
+def test_output_dim_matches_session_shape(monkeypatch):
+    _install_fake_onnxruntime(monkeypatch, FakeSession(np.zeros((1, 512), dtype=np.float32)))
+    extractor = ReidExtractor("fake/path.onnx")
+
+    assert extractor.output_dim == 512
+
+
+def test_output_dim_flags_mismatch(monkeypatch):
+    _install_fake_onnxruntime(
+        monkeypatch, FakeSession(np.zeros((1, 256), dtype=np.float32), output_dim=256)
+    )
+    extractor = ReidExtractor("fake/path.onnx")
+
+    assert extractor.output_dim == 256
 
 
 def test_extract_returns_none_for_empty_crop(monkeypatch):

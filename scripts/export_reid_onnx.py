@@ -12,6 +12,18 @@ the resulting .onnx file needs to reach the vision worker, and it gets there
 via the existing `./models:/app/models` volume mount in docker-compose.yml
 (no Dockerfile change, no build-time network dependency).
 
+Use torch<2.6 (e.g. 2.1.2) in that export-only venv/container. This is a
+confirmed hard requirement, not just caution: torch 2.6 flipped
+`torch.load`'s `weights_only` default to True, and torchreid's
+`load_pretrained_weights` was never patched for it - loading the
+pretrained checkpoint raises "Unsupported global: GLOBAL
+numpy._core.multiarray.scalar was not an allowed global by default"
+(open, unresolved: https://github.com/KaiyangZhou/deep-person-reid/issues/592).
+This is isolated to this one throwaway export environment - it has no
+effect on the vision worker image, which stays on torch==2.6.0 in
+vision/requirements.txt (the CVE-2025-32434 fix) untouched, since only the
+exported .onnx file crosses that boundary.
+
 Usage:
     python scripts/export_reid_onnx.py
     python scripts/export_reid_onnx.py --out models/reid/osnet_x0_25.onnx
