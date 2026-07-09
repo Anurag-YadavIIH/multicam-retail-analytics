@@ -1,4 +1,10 @@
-"""Measure detector latency/FPS on this machine (CPU or GPU)."""
+"""Measure detector latency/FPS on this machine (CPU or GPU).
+
+Usage (run as a module - `python scripts/benchmark_inference.py` puts
+scripts/ itself on sys.path instead of the repo root, so `vision` fails
+to import):
+    python -m scripts.benchmark_inference --model yolo11n.pt --device cpu
+"""
 
 import argparse
 import time

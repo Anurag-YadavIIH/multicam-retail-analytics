@@ -174,6 +174,30 @@ audit indefinitely. The TTL window is configurable
 depends on the deployment (a 24h default suits daily-shopper re-identification;
 a multi-day retail environment might want longer).
 
+### Representative embedding: frozen at creation, deliberately
+
+An identity's `embedding` - the vector every new track gets compared against
+(`match_or_create_identity` in "Matching" above) - is set once, from whichever
+track first created that identity (`create_identity_from_track`), and never
+updated afterward. `link_track_to_identity` bumps `last_seen` and
+`track_count` on every subsequent match but does not touch `embedding`, even
+after dozens of them (see the 36-match identity in "Session breakdown"
+below).
+
+This is a deliberate simplicity choice, not an oversight: one write on
+creation, no read-modify-write race between concurrent matches, no decision
+about *how* to fold a new embedding into the representative one. The
+tradeoff is **drift** for long-lived identities - if someone's appearance
+changes enough over the identity's lifetime (different clothing, lighting,
+pose mix) that it no longer resembles the original anchor embedding, matching
+degrades even though the person hasn't logically changed. The live run
+didn't hit this (36 same-day, same-clothing sightings against one frozen
+anchor matched cleanly), but a multi-day deployment plausibly would.
+Embedding averaging (a running mean over an identity's matched tracks) or
+periodic re-clustering are the natural next step if that shows up in
+practice - neither is built now because nothing here demonstrates it's
+needed yet.
+
 ## Privacy considerations
 
 Re-ID embeddings are **biometric-adjacent data** - not raw biometrics (a face

@@ -14,3 +14,6 @@ PyYAML==6.0.2
 kafka-python-ng==2.2.3
 prometheus-client==0.21.1
 mlflow-skinny==2.14.1
+setuptools<82  # mlflow-skinny 2.14.1 imports pkg_resources, removed in setuptools 82.0.0;
+               # otherwise pulled in transiently and unpinned via torch, so it drifts to
+               # whatever latest setuptools is current and silently breaks `import mlflow`

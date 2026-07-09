@@ -21,7 +21,7 @@ for multi-GPU scale-out).
 
 ## Benchmark your machine
 ```bash
-python scripts/benchmark_inference.py --model yolo11n.pt --device cpu
+python -m scripts.benchmark_inference --model yolo11n.pt --device cpu
 ```
 Typical: yolo11n @960px ≈ 8–15 FPS on a modern laptop CPU; ≈150+ FPS on an RTX GPU.
 
